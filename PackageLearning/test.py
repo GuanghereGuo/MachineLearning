@@ -1,17 +1,11 @@
-import seaborn as sns
+import os
+from matplotlib.image import imread
 import matplotlib.pyplot as plt
 
-sns.set_theme(style="whitegrid", palette="pastel", context="paper")
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
-products = ["Product A", "Product B", "Product C", "Product D"]
-sales = [120, 210, 150, 180]
+image_path = os.path.join(script_dir, '..', 'DeepLearningFromScratchCode', 'dataset', 'lena_gray.png')
+img = imread(image_path)
+plt.imshow(img)
 
-sns.barplot(x=products, y=sales)
-
-# 添加标签和标题
-plt.xlabel("Products")
-plt.ylabel("Sales")
-plt.title("Product Sales by Category")
-
-# 显示图表
 plt.show()
