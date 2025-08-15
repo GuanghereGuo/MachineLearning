@@ -6,9 +6,6 @@ from tqdm import tqdm
 import time
 from collections import OrderedDict  # 引入有序字典，保证网络层次的顺序
 
-# --- 模块化层定义 (关键修改) ---
-# 将网络的功能拆分成独立的层，每个层都有 forward 和 backward 方法
-
 
 class Relu:
     """ReLU 激活函数层"""
