@@ -4,7 +4,6 @@ import sklearn
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 
-
 # --- 辅助函数 (无修改) ---
 def softmax(x):
     if x.ndim == 2:

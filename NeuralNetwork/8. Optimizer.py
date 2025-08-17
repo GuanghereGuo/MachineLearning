@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn
 from abc import ABC, abstractmethod
-
 from tqdm import tqdm
 
 
