@@ -329,7 +329,7 @@ if __name__ == "__main__":
     t_train = np.eye(10)[t_train]
     t_test = np.eye(10)[t_test]
 
-    epoch_num = 20
+    epoch_num = 10
     batch_size = 100
     hidden_size = 256
 
