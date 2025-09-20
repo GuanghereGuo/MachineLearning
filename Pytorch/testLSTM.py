@@ -5,6 +5,7 @@ import math
 from collections import Counter
 from tqdm import tqdm
 
+
 class Dictionary(object):
     def __init__(self):
         self.word2idx = {}
@@ -27,6 +28,7 @@ class Dictionary(object):
 
     def __len__(self):
         return len(self.idx2word)
+
 
 class Corpus(object):
     def __init__(self, path='./ptb_data'):
@@ -76,10 +78,10 @@ class RNNModel(nn.Module):
         self.num_layers = num_layers
 
     def init_weights(self):
-        initrange = 0.1
-        self.embedding.weight.data.uniform_(-initrange, initrange)
+        init_range = 0.1
+        self.embedding.weight.data.uniform_(-init_range, init_range)
         self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-initrange, initrange)
+        self.decoder.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, x, hidden):
         emb = self.embedding(x)
@@ -90,18 +92,18 @@ class RNNModel(nn.Module):
         return decoded.view(-1, decoded.size(2)), hidden
 
     def init_hidden(self, bsz):
-        weight = next(self.parameters())
+        weight = next(self.parameters())  # get information of device, type ect.
         return (weight.new_zeros(self.num_layers, bsz, self.hidden_size),
                 weight.new_zeros(self.num_layers, bsz, self.hidden_size))
 
 
-embed_size = 256
-hidden_size = 256
+embed_size = 512
+hidden_size = 512
 num_layers = 2
 num_epochs = 40
 batch_size = 20
-bptt_len = 35
-learning_rate = 20.0
+bptt_len = 100
+learning_rate = 0.001
 dropout = 0.5
 clip_grad = 0.25
 
@@ -111,33 +113,37 @@ print(f"Using device: {device}")
 corpus = Corpus()
 vocab_size = len(corpus.dictionary)
 
+
 def batchify(data, bsz):
-    num_batches = data.size(0) // bsz
-    data = data.narrow(0, 0, num_batches * bsz)
-    data = data.view(bsz, -1).t().contiguous()
+    seq_len = data.size(0) // bsz
+    data = data.narrow(0, 0, seq_len * bsz)  # dim, start, len
+    data = data.view(bsz, seq_len).t().contiguous()
     return data.to(device)
+
 
 train_data = batchify(corpus.train, batch_size)
 val_data = batchify(corpus.valid, batch_size)
 test_data = batchify(corpus.test, batch_size)
 
-
 model = RNNModel(vocab_size, embed_size, hidden_size, num_layers, dropout, tie_weights=True).to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
 
-def repackage_hidden(h):
+
+def repackage_hidden(h):  # core of TBPTT
     if isinstance(h, torch.Tensor):
-        return h.detach()
+        return h.detach()  # cut computation graph of auto gradient
     else:
         return tuple(repackage_hidden(v) for v in h)
 
+
 def get_batch(source, i):
     seq_len = min(bptt_len, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].reshape(-1)
+    data = source[i:i + seq_len]
+    target = source[i + 1:i + 1 + seq_len].reshape(-1)
     return data, target
+
 
 def evaluate(data_source, desc="Evaluating"):
     model.eval()
@@ -147,12 +153,13 @@ def evaluate(data_source, desc="Evaluating"):
     with torch.no_grad():
         # 使用tqdm进行评估
         data_iterator = range(0, data_source.size(0) - 1, bptt_len)
-        for i in tqdm(data_iterator, desc=desc, leave=False, unit="batch"):
+        for i in tqdm(data_iterator, desc=desc, leave=False, unit="bptt_blocks"):
             data, targets = get_batch(data_source, i)
             output, hidden = model(data, hidden)
             total_loss += len(data) * criterion(output, targets).item()
             hidden = repackage_hidden(hidden)
     return total_loss / (len(data_source) - 1)
+
 
 def train():
     model.train()
@@ -160,10 +167,10 @@ def train():
     hidden = model.init_hidden(batch_size)
 
     # 使用tqdm创建进度条
-    num_batches = (train_data.size(0) - 1) // bptt_len
+    seq_len = (train_data.size(0) - 1) // bptt_len
     data_iterator = range(0, train_data.size(0) - 1, bptt_len)
 
-    progress_bar = tqdm(enumerate(data_iterator), total=num_batches, desc=f"Epoch {epoch:2d}", unit="batch")
+    progress_bar = tqdm(enumerate(data_iterator), total=seq_len, desc=f"Epoch {epoch:2d}", unit="batch")
 
     for batch, i in progress_bar:
         data, targets = get_batch(train_data, i)
@@ -181,7 +188,7 @@ def train():
         total_loss += loss.item()
 
         # 使用tqdm的set_postfix方法动态更新信息
-        if batch % 10 == 0: # 更新频率可以调整
+        if batch % 10 == 0:  # 更新频率可以调整
             current_lr = optimizer.param_groups[0]["lr"]
             progress_bar.set_postfix(
                 loss=f'{loss.item():.2f}',
@@ -189,13 +196,14 @@ def train():
                 lr=f'{current_lr:.4f}'
             )
 
+
 best_val_loss = float("inf")
 
 try:
     for epoch in range(1, num_epochs + 1):
         train()
         val_loss = evaluate(val_data, desc=f"Validating Epoch {epoch:2d}")
-        print() # 在tqdm进度条后换行
+        print()  # 在tqdm进度条后换行
         print('-' * 89)
         print(f'| end of epoch {epoch:3d} | valid loss {val_loss:5.2f} | '
               f'valid ppl {math.exp(val_loss):8.2f}')
@@ -217,9 +225,6 @@ except KeyboardInterrupt:
 # 加载最佳模型并进行最终测试
 print("\nLoading best model for final test...")
 with open('model.pt', 'rb') as f:
-    # ***** FIX: Set weights_only=False *****
-    # This is required in PyTorch 2.6+ when loading a full model object (not just a state_dict)
-    # It tells PyTorch to trust the source and allow unpickling the model's class structure.
     model = torch.load(f, weights_only=False)
 
 model.to(device)
